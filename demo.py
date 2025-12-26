@@ -65,7 +65,7 @@ def load_champion_roles_from_csv():
     csv_role_map = {"Top": "Top", "Jungle": "Jug", "Middle": "Mid", "Bottom": "Adc", "Support": "Sup"}
     
     try:
-        df = pd.read_csv(r'D:\AI\cuoikiDS\data\champ_data.csv')
+        df = pd.read_csv("data/champ_data.csv")
         for _, row in df.iterrows():
             raw_name = str(row['name'])
             norm_name = normalize_name(raw_name)

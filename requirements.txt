@@ -1,0 +1,11 @@
+streamlit
+pandas
+numpy
+requests
+streamlit-image-select
+torch==2.2.2
+torch-scatter -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
+torch-sparse  -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
+torch-cluster -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
+torch-spline-conv -f https://data.pyg.org/whl/torch-2.2.0+cpu.html
+torch-geometric
