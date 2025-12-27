@@ -6,3 +6,7 @@ streamlit-image-select
 streamlit-option-menu
 torch
 torch-geometric
+matplotlib
+seaborn
+wordcloud
+scikit-learn
