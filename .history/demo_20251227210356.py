@@ -137,22 +137,22 @@ def render_analytics_tab():
             else: st.warning("Thiếu ảnh most-use-champ.png")
             
         with col4:
-            if os.path.exists("chart/win-rate.png"):
-                st.image("chart/win-rate.png", caption="Top 15 Tướng có Tỷ lệ thắng cao nhất", use_container_width=True)
+            if os.path.exists("win-rate.png"):
+                st.image("win-rate.png", caption="Top 15 Tướng có Tỷ lệ thắng cao nhất", use_container_width=True)
             else: st.warning("Thiếu ảnh win-rate.png")
 
     # --- PHẦN 3: CHIẾN THUẬT & MỤC TIÊU ---
     with st.container(border=True):
         st.subheader("III. Chiến thuật & Mục tiêu lớn")
         
-        if os.path.exists("chart/objectives.png"):
-            st.image("chart/objectives.png", caption="So sánh Mục tiêu trung bình (Baron, Rồng, Trụ)", use_container_width=True)
+        if os.path.exists("objectives.png"):
+            st.image("objectives.png", caption="So sánh Mục tiêu trung bình (Baron, Rồng, Trụ)", use_container_width=True)
         else: st.warning("Thiếu ảnh objectives.png")
         
         st.markdown("---")
         
-        if os.path.exists("chart/objectives-to-win.png"):
-            st.image("chart/objectives-to-win.png", caption="Ma trận Tương quan: Mức độ ảnh hưởng của Mục tiêu đến Chiến thắng", use_container_width=True)
+        if os.path.exists("objectives-to-win.png"):
+            st.image("objectives-to-win.png", caption="Ma trận Tương quan: Mức độ ảnh hưởng của Mục tiêu đến Chiến thắng", use_container_width=True)
         else: st.warning("Thiếu ảnh objectives-to-win.png")
 
     # --- PHẦN 4: MODEL INTERNALS (t-SNE) ---
@@ -160,8 +160,8 @@ def render_analytics_tab():
         st.subheader("IV. Không gian Vector (Model Internals)")
         st.markdown("Biểu đồ **t-SNE** hiển thị cách mô hình GAT gom nhóm các tướng có vai trò tương đồng lại gần nhau.")
         
-        if os.path.exists("chart/champion_embeddings_tsne.png"):
-            st.image("chart/champion_embeddings_tsne.png", caption="t-SNE Visualization of Champion Embeddings", use_container_width=True)
+        if os.path.exists("champion_embeddings_tsne.png"):
+            st.image("champion_embeddings_tsne.png", caption="t-SNE Visualization of Champion Embeddings", use_container_width=True)
         else:
             st.info("💡 Mẹo: Chạy file 'draw_tnse.py' để tạo biểu đồ này.")
 
@@ -171,6 +171,7 @@ def render_analytics_tab():
 
 # Sidebar
 with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/d/d8/League_of_Legends_2019_vector.svg", width=150)
     st.write("") 
 
     # --- MENU DARK MODE & NO ICONS ---
@@ -196,6 +197,9 @@ with st.sidebar:
             },
         }
     )
+    
+    st.write("---")
+    st.info("Đồ án: Hệ thống gợi ý Ban/Pick LoL\nModel: GAT (Graph Attention Network)")
 
 # --- LOGIC: ANALYTICS ---
 if app_mode == "Model Analytics":

@@ -171,6 +171,7 @@ def render_analytics_tab():
 
 # Sidebar
 with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/d/d8/League_of_Legends_2019_vector.svg", width=150)
     st.write("") 
 
     # --- MENU DARK MODE & NO ICONS ---
@@ -196,6 +197,9 @@ with st.sidebar:
             },
         }
     )
+    
+    st.write("---")
+    st.info("Đồ án: Hệ thống gợi ý Ban/Pick LoL\nModel: GAT (Graph Attention Network)")
 
 # --- LOGIC: ANALYTICS ---
 if app_mode == "Model Analytics":

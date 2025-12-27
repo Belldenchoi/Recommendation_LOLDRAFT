@@ -1,8 +1,8 @@
+python==3.10
 streamlit
 pandas
 numpy
 requests
 streamlit-image-select
-streamlit-option-menu
-torch
-torch-geometric
+torch==2.2.2
+torch-geometric==2.3.3

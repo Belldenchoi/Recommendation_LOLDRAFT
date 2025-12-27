@@ -161,7 +161,7 @@ def render_analytics_tab():
         st.markdown("Biểu đồ **t-SNE** hiển thị cách mô hình GAT gom nhóm các tướng có vai trò tương đồng lại gần nhau.")
         
         if os.path.exists("chart/champion_embeddings_tsne.png"):
-            st.image("chart/champion_embeddings_tsne.png", caption="t-SNE Visualization of Champion Embeddings", use_container_width=True)
+            st.image("champion_embeddings_tsne.png", caption="t-SNE Visualization of Champion Embeddings", use_container_width=True)
         else:
             st.info("💡 Mẹo: Chạy file 'draw_tnse.py' để tạo biểu đồ này.")
 
@@ -171,6 +171,7 @@ def render_analytics_tab():
 
 # Sidebar
 with st.sidebar:
+    st.image("https://upload.wikimedia.org/wikipedia/commons/d/d8/League_of_Legends_2019_vector.svg", width=150)
     st.write("") 
 
     # --- MENU DARK MODE & NO ICONS ---
@@ -196,6 +197,9 @@ with st.sidebar:
             },
         }
     )
+    
+    st.write("---")
+    st.info("Đồ án: Hệ thống gợi ý Ban/Pick LoL\nModel: GAT (Graph Attention Network)")
 
 # --- LOGIC: ANALYTICS ---
 if app_mode == "Model Analytics":

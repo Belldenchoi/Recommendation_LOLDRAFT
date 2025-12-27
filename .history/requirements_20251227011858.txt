@@ -3,6 +3,5 @@ pandas
 numpy
 requests
 streamlit-image-select
-streamlit-option-menu
 torch
 torch-geometric

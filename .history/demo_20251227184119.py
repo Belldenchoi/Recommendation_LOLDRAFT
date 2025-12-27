@@ -14,11 +14,11 @@ from streamlit_image_select import image_select
 from streamlit_option_menu import option_menu
 
 # ==========================================
-# 1. CẤU HÌNH & MODEL CLASS
+# 1. CẤU HÌNH & UTILS & MODEL
 # ==========================================
-st.set_page_config(page_title="LoL GAT Project", layout="wide", page_icon="🏆")
+st.set_page_config(page_title="LoL AI Draft Project", layout="wide", page_icon="🏆")
 
-# --- MODEL GAT ---
+# --- MODEL CLASS ---
 class LoLGATRecommender(torch.nn.Module):
     def __init__(self, num_champions, embedding_dim=32, hidden_dim=64):
         super(LoLGATRecommender, self).__init__()
@@ -34,7 +34,7 @@ class LoLGATRecommender(torch.nn.Module):
         x = global_mean_pool(x, batch)
         return torch.sigmoid(self.fc(x))
 
-# --- UTILS ---
+# --- HELPER FUNCTIONS ---
 @st.cache_resource
 def get_latest_ddragon_version():
     try:
@@ -47,11 +47,13 @@ def get_latest_ddragon_version():
 LATEST_VERSION = get_latest_ddragon_version()
 
 def normalize_name(name):
+    """Chuẩn hóa tên để so sánh (xóa dấu cách, viết thường)"""
     return str(name).lower().replace(" ", "").replace("'", "").replace(".", "").strip()
 
 def get_champ_image(name):
     if name is None or name == "No Champion":
         return "https://raw.communitydragon.org/latest/plugins/rcp-be-lol-game-data/global/default/v1/profile-icons/0.jpg"
+    
     clean_name = name.replace("'", "").replace(" ", "").replace(".", "")
     exceptions = {
         "Wukong": "MonkeyKing", "RenataGlasc": "Renata", "Nunu&Willump": "Nunu",
@@ -61,13 +63,16 @@ def get_champ_image(name):
     final_name = exceptions.get(clean_name, clean_name)
     return f"https://ddragon.leagueoflegends.com/cdn/{LATEST_VERSION}/img/champion/{final_name}.png"
 
+# --- LOAD DATA & MODEL ---
 @st.cache_resource
-def load_data_and_model():
+def load_assets():
     # 1. Load Mapping
     with open('champion_mapping.pkl', 'rb') as f: mapping = pickle.load(f)
     
-    # 2. Load Roles
+    # 2. Load Roles & Stats từ CSV
     roles_db = {"Top": set(), "Jug": set(), "Mid": set(), "Adc": set(), "Sup": set()}
+    role_distribution = [] # Dùng cho biểu đồ tròn
+    
     csv_role_map = {"Top": "Top", "Jungle": "Jug", "Middle": "Mid", "Bottom": "Adc", "Support": "Sup"}
     
     try:
@@ -75,9 +80,15 @@ def load_data_and_model():
         for _, row in df.iterrows():
             raw_name = str(row['name'])
             norm_name = normalize_name(raw_name)
+            
             raw_lane = str(row['lane']).replace("Role(s): ", "")
-            roles_list = [x.strip() for x in raw_lane.split(',')]
-            for r in roles_list:
+            lanes_split = [x.strip() for x in raw_lane.split(',')]
+            
+            # Lưu role đầu tiên làm role chính cho thống kê
+            main_role = lanes_split[0] if lanes_split else "Unknown"
+            role_distribution.append(main_role)
+
+            for r in lanes_split:
                 if r in csv_role_map: 
                     roles_db[csv_role_map[r]].add(norm_name)
     except: pass
@@ -95,75 +106,109 @@ def load_data_and_model():
     edges = [[i, j] for i in range(10) for j in range(10) if i != j]
     edge_index = torch.tensor(edges, dtype=torch.long).t().contiguous()
     
-    return mapping, model, edge_index, roles_db
+    return mapping, model, edge_index, roles_db, role_distribution
 
-# Load Assets
-mapping, model, edge_index, CHAMPION_ROLES = load_data_and_model()
+# Khởi tạo dữ liệu
+mapping, model, edge_index, CHAMPION_ROLES, ROLE_STATS_LIST = load_assets()
 name_to_idx = {v: k for k, v in mapping['idx_to_name'].items()}
+idx_to_name = mapping['idx_to_name']
 all_names = sorted([n for n in mapping['idx_to_name'].values() if n != "No Champion"])
 ROLE_NAMES = ["Top", "Jug", "Mid", "Adc", "Sup"] * 2 
 
 # ==========================================
-# 2. HÀM VẼ BIỂU ĐỒ (ANALYTICS) - ĐÃ CẬP NHẬT
+# 2. CÁC HÀM XỬ LÝ GIAO DIỆN
 # ==========================================
 
-def render_analytics_tab():
-    st.title("📊 Model Analytics Dashboard")
-    st.markdown("### Phân tích Dữ liệu & Hiệu suất Mô hình")
+def render_champion_grid(champs_to_show, key_prefix, unique_id=0):
+    """Hàm hiển thị lưới chọn tướng với Search Bar và Scroll"""
+    c1, c2, c3 = st.columns([1, 4, 1])
+    with c2:
+        search_term = st.text_input(
+            "🔍", 
+            placeholder="Gõ tên tướng...", 
+            label_visibility="collapsed", 
+            key=f"{key_prefix}_s_{unique_id}_{st.session_state.session_id}"
+        )
     
-    # --- PHẦN 1: TỔNG QUAN TRẬN ĐẤU ---
-    with st.container(border=True):
-        st.subheader("I. Tổng quan Trận đấu (Match Overview)")
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if os.path.exists("chart/team-winrate.png"):
-                st.image("chart/team-winrate.png", caption="Tỷ lệ thắng giữa hai đội", use_container_width=True)
-            else: st.warning("Thiếu ảnh team-winrate.png")
+    if search_term:
+        term = normalize_name(search_term)
+        filtered = [c for c in champs_to_show if term in normalize_name(c)]
+    else: 
+        filtered = champs_to_show
+    
+    if not filtered:
+        st.warning("Không tìm thấy tướng phù hợp!"); return None
+    
+    with st.container(height=450, border=True):
+        imgs = [get_champ_image(c) for c in filtered]
+        # Session ID trong key giúp reset widget hoàn toàn khi bấm Reset
+        idx = image_select(
+            label="", 
+            images=imgs, 
+            captions=filtered, 
+            use_container_width=False, 
+            key=f"{key_prefix}_sel_{unique_id}_{st.session_state.session_id}", 
+            return_value="index"
+        )
+    return filtered[idx] if idx is not None else None
+
+def render_analytics_tab():
+    """Hàm hiển thị Tab Báo cáo/Thống kê"""
+    st.title("📊 Model Analytics Dashboard")
+    st.markdown("---")
+
+    # 1. t-SNE Image
+    st.header("1. Không gian Vector Tướng (t-SNE)")
+    st.markdown("Biểu đồ thể hiện khả năng học đặc trưng (Feature Learning) của mô hình GAT.")
+    
+    tsne_path = "champion_embeddings_tsne.png"
+    if os.path.exists(tsne_path):
+        st.image(tsne_path, caption="Phân cụm tướng theo Role (Dữ liệu Embedding 32-dim)", use_container_width=True)
+    else:
+        st.error("⚠️ Không tìm thấy file 'champion_embeddings_tsne.png'. Vui lòng chạy file 'draw_tnse.py' trước!")
+
+    st.markdown("---")
+
+    # 2. Role Distribution
+    st.header("2. Phân bố dữ liệu Training")
+    col1, col2 = st.columns(2)
+    with col1:
+        # Vẽ biểu đồ tròn từ dữ liệu CSV đã load
+        if ROLE_STATS_LIST:
+            df_roles = pd.DataFrame(ROLE_STATS_LIST, columns=['Role'])
+            role_counts = df_roles['Role'].value_counts()
             
-        with col2:
-            if os.path.exists("chart/game-duration.png"):
-                st.image("chart/game-duration.png", caption="Phân bố thời gian trận đấu", use_container_width=True)
-            else: st.warning("Thiếu ảnh game-duration.png")
-
-    # --- PHẦN 2: PHÂN TÍCH TƯỚNG ---
-    with st.container(border=True):
-        st.subheader("II. Phân tích Tướng (Champion Meta)")
-        col3, col4 = st.columns(2)
-        
-        with col3:
-            if os.path.exists("chart/most-use-champ.png"):
-                st.image("chart/most-use-champ.png", caption="WordCloud: Tướng được dùng nhiều nhất", use_container_width=True)
-            else: st.warning("Thiếu ảnh most-use-champ.png")
-            
-        with col4:
-            if os.path.exists("chart/win-rate.png"):
-                st.image("chart/win-rate.png", caption="Top 15 Tướng có Tỷ lệ thắng cao nhất", use_container_width=True)
-            else: st.warning("Thiếu ảnh win-rate.png")
-
-    # --- PHẦN 3: CHIẾN THUẬT & MỤC TIÊU ---
-    with st.container(border=True):
-        st.subheader("III. Chiến thuật & Mục tiêu lớn")
-        
-        if os.path.exists("chart/objectives.png"):
-            st.image("chart/objectives.png", caption="So sánh Mục tiêu trung bình (Baron, Rồng, Trụ)", use_container_width=True)
-        else: st.warning("Thiếu ảnh objectives.png")
-        
-        st.markdown("---")
-        
-        if os.path.exists("chart/objectives-to-win.png"):
-            st.image("chart/objectives-to-win.png", caption="Ma trận Tương quan: Mức độ ảnh hưởng của Mục tiêu đến Chiến thắng", use_container_width=True)
-        else: st.warning("Thiếu ảnh objectives-to-win.png")
-
-    # --- PHẦN 4: MODEL INTERNALS (t-SNE) ---
-    with st.container(border=True):
-        st.subheader("IV. Không gian Vector (Model Internals)")
-        st.markdown("Biểu đồ **t-SNE** hiển thị cách mô hình GAT gom nhóm các tướng có vai trò tương đồng lại gần nhau.")
-        
-        if os.path.exists("chart/champion_embeddings_tsne.png"):
-            st.image("chart/champion_embeddings_tsne.png", caption="t-SNE Visualization of Champion Embeddings", use_container_width=True)
+            fig, ax = plt.subplots()
+            ax.pie(role_counts, labels=role_counts.index, autopct='%1.1f%%', startangle=90, colors=sns.color_palette('pastel'))
+            ax.axis('equal')
+            st.pyplot(fig)
         else:
-            st.info("💡 Mẹo: Chạy file 'draw_tnse.py' để tạo biểu đồ này.")
+            st.warning("Không có dữ liệu thống kê Role.")
+            
+    with col2:
+        st.markdown("### Thông số kỹ thuật")
+        st.metric("Kiến trúc", "Graph Attention Network (GAT)")
+        c1, c2 = st.columns(2)
+        c1.metric("Embedding Dim", "32")
+        c2.metric("Dataset Size", f"{len(ROLE_STATS_LIST)} Champions")
+
+    # 3. Custom Charts
+    st.markdown("---")
+    st.header("3. Kết quả Huấn luyện & Đánh giá")
+    tab1, tab2 = st.tabs(["📉 Loss/Accuracy", "🔥 Confusion Matrix"])
+    
+    with tab1:
+        if os.path.exists("loss_chart.png"):
+            st.image("loss_chart.png", caption="Training Loss History", use_container_width=True)
+        else: st.info("Chưa có file loss_chart.png")
+        
+        if os.path.exists("accuracy_chart.png"):
+            st.image("accuracy_chart.png", caption="Validation Accuracy", use_container_width=True)
+            
+    with tab2:
+        if os.path.exists("heatmap.png"):
+            st.image("heatmap.png", caption="Correlation Matrix", use_container_width=True)
+        else: st.info("Chưa có file heatmap.png")
 
 # ==========================================
 # 3. CHƯƠNG TRÌNH CHÍNH
@@ -171,27 +216,29 @@ def render_analytics_tab():
 
 # Sidebar
 with st.sidebar:
-    st.write("") 
+    st.image("https://upload.wikimedia.org/wikipedia/commons/d/d8/League_of_Legends_2019_vector.svg", width=150)
+    st.write("") # Khoảng cách
 
-    # --- MENU DARK MODE & NO ICONS ---
+    # --- MENU ĐẸP (OPTION MENU) ---
+    # styles: Cấu hình CSS để nút to và in đậm khi được chọn
     app_mode = option_menu(
-        menu_title="Menu Chính",
-        options=["Draft Simulator", "Model Analytics"],
-        icons=['', ''], 
-        menu_icon="cast", 
-        default_index=0,
+        menu_title="Menu Chính",  # Tiêu đề
+        options=["Draft Simulator", "Model Analytics"], # Các mục
+        icons=["controller", "bar-chart-fill"], # Icon (lấy từ Bootstrap Icons)
+        menu_icon="cast", # Icon của menu chính
+        default_index=0, # Mặc định chọn cái đầu tiên
         styles={
-            "container": {"padding": "5!important", "background-color": "#1E1E1E"},
+            "container": {"padding": "5!important", "background-color": "#f0f2f6"},
+            "icon": {"color": "orange", "font-size": "20px"}, 
             "nav-link": {
-                "font-size": "18px",
-                "text-align": "left",
-                "margin": "0px",
-                "color": "#FFFFFF",      
-                "--hover-color": "#333333"
+                "font-size": "18px", # Cỡ chữ to
+                "text-align": "left", 
+                "margin": "0px", 
+                "--hover-color": "#eee"
             },
             "nav-link-selected": {
-                "background-color": "#0099ff",
-                "font-weight": "bold",
+                "background-color": "#0099ff", # Màu nền khi chọn
+                "font-weight": "bold", # IN ĐẬM KHI CHỌN
                 "color": "white",
             },
         }
@@ -202,7 +249,7 @@ if app_mode == "Model Analytics":
     render_analytics_tab()
 
 # --- LOGIC: SIMULATOR ---
-elif app_mode == "Draft Simulator":
+elif app_mode ==  Draft Simulator":
     # Init Session
     if 'session_id' not in st.session_state: st.session_state.session_id = str(uuid.uuid4())
     if 'ban_list' not in st.session_state: st.session_state.ban_list = []
@@ -256,24 +303,6 @@ elif app_mode == "Draft Simulator":
 
     # --- CỘT GIỮA (ACTION) ---
     with col_center:
-        # HÀM GRID
-        def render_champion_grid(champs_to_show, key_prefix, unique_id=0):
-            c1, c2, c3 = st.columns([1, 4, 1])
-            with c2:
-                search_term = st.text_input("🔍", placeholder="Tìm tướng...", label_visibility="collapsed", key=f"{key_prefix}_s_{unique_id}_{st.session_state.session_id}")
-            if search_term:
-                term = normalize_name(search_term)
-                filtered = [c for c in champs_to_show if term in normalize_name(c)]
-            else: filtered = champs_to_show
-            
-            if not filtered:
-                st.warning("Không tìm thấy!"); return None
-            
-            with st.container(height=450, border=True):
-                imgs = [get_champ_image(c) for c in filtered]
-                idx = image_select(label="", images=imgs, captions=filtered, use_container_width=False, key=f"{key_prefix}_sel_{unique_id}_{st.session_state.session_id}", return_value="index")
-            return filtered[idx] if idx is not None else None
-
         # >>> PHASE: BAN <<<
         if st.session_state.phase == "BAN":
             st.info(f"🚫 Lượt CẤM thứ: {len(st.session_state.ban_list) + 1} / 10")
@@ -294,6 +323,7 @@ elif app_mode == "Draft Simulator":
                 idx = ORDER[st.session_state.step]
                 is_blue = idx < 5
                 role_label = ROLE_NAMES[idx]
+                
                 color = "blue" if is_blue else "red"
                 team_txt = "BLUE" if is_blue else "RED"
                 st.markdown(f"<h4 style='text-align:center; color:{color}'>Đang chọn: {team_txt} - {role_label.upper()}</h4>", unsafe_allow_html=True)
@@ -306,9 +336,11 @@ elif app_mode == "Draft Simulator":
                         
                         valid_roles = CHAMPION_ROLES.get(role_label, set())
                         search_space = [c for c in available if normalize_name(c) in valid_roles]
-                        if not search_space: st.warning("Hết tướng role này!")
+                        
+                        if not search_space:
+                            st.warning("Hết tướng role này!")
                         else:
-                            # 1. Base Score
+                            # 1. Base Score (Trước khi pick)
                             base_draft = st.session_state.final_draft.copy(); base_draft[idx] = None
                             ids_base = [name_to_idx.get(n if n else "No Champion", 0) for n in base_draft]
                             with torch.no_grad():
@@ -316,24 +348,26 @@ elif app_mode == "Draft Simulator":
                             
                             suggestions = []
                             total_cands = len(search_space)
+                            
                             for i_prog, cand in enumerate(search_space):
                                 my_bar.progress(int((i_prog/total_cands)*100), text=f"Đang phân tích: {cand}")
                                 
-                                # 2. New Score
+                                # 2. New Score (Sau khi pick)
                                 tmp = st.session_state.final_draft.copy(); tmp[idx] = cand
                                 ids_new = [name_to_idx.get(n if n else "No Champion", 0) for n in tmp]
                                 with torch.no_grad():
                                     new_blue_wr = model(torch.tensor(ids_new), edge_index, torch.zeros(10, dtype=torch.long)).item()
                                 
-                                # 3. Impact
+                                # 3. Impact Logic
                                 raw_delta = new_blue_wr - base_blue_wr
                                 if is_blue:
-                                    impact = raw_delta 
+                                    impact = raw_delta # Blue muốn WR tăng
                                     sort_score = new_blue_wr
                                 else:
-                                    impact = -raw_delta 
+                                    impact = -raw_delta # Red muốn WR giảm -> Delta âm là tốt -> Đảo dấu thành dương
                                     sort_score = 1.0 - new_blue_wr
                                 
+                                # Hệ số Ranking: Ưu tiên Impact cao
                                 final_rank = sort_score + (impact * 10.0)
                                 suggestions.append((cand, final_rank, impact))
                             
@@ -366,6 +400,7 @@ elif app_mode == "Draft Simulator":
                 filtered_grid = [c for c in available if normalize_name(c) in valid_roles]
                 c_check, _ = st.columns([1, 1])
                 with c_check: show_all = st.checkbox("Mở rộng (Hiện tất cả tướng)", value=False)
+                
                 final_list = available if show_all else (filtered_grid if filtered_grid else available)
                 
                 user_pick = render_champion_grid(final_list, "pick", st.session_state.step)

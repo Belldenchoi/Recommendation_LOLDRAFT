@@ -196,6 +196,9 @@ with st.sidebar:
             },
         }
     )
+    
+    st.write("---")
+    st.info("Đồ án: Hệ thống gợi ý Ban/Pick LoL\nModel: GAT (Graph Attention Network)")
 
 # --- LOGIC: ANALYTICS ---
 if app_mode == "Model Analytics":
