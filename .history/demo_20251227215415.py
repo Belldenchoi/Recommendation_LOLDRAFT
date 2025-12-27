@@ -71,7 +71,7 @@ def load_data_and_model():
     csv_role_map = {"Top": "Top", "Jungle": "Jug", "Middle": "Mid", "Bottom": "Adc", "Support": "Sup"}
     
     try:
-        df = pd.read_csv('data/champ_data.csv')
+        df = pd.read_csv('champ_data.csv')
         for _, row in df.iterrows():
             raw_name = str(row['name'])
             norm_name = normalize_name(raw_name)
