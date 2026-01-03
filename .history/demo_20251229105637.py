@@ -346,11 +346,13 @@ elif app_mode == "Draft Simulator":
                             st.error(f"Đã xảy ra lỗi khi tính toán: {e}")
                 
                 st.write("---")
+                # --- MAIN PICK GRID ---
                 valid_roles = CHAMPION_ROLES.get(role_label, set())
                 filtered_grid = [c for c in available if normalize_name(c) in valid_roles]
                 c_check, _ = st.columns([1, 1])
                 with c_check: show_all = st.checkbox("Mở rộng (Hiện tất cả tướng)", value=False)
                 
+                # Fallback cho Main Grid luôn
                 final_list = available if show_all else (filtered_grid if filtered_grid else available)
                 
                 user_pick = render_champion_grid(final_list, "pick", st.session_state.step)

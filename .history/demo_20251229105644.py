@@ -351,6 +351,7 @@ elif app_mode == "Draft Simulator":
                 c_check, _ = st.columns([1, 1])
                 with c_check: show_all = st.checkbox("Mở rộng (Hiện tất cả tướng)", value=False)
                 
+                # Fallback cho Main Grid luôn
                 final_list = available if show_all else (filtered_grid if filtered_grid else available)
                 
                 user_pick = render_champion_grid(final_list, "pick", st.session_state.step)

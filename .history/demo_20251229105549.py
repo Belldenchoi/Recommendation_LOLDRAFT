@@ -228,7 +228,9 @@ elif app_mode == "Draft Simulator":
                 else: st.markdown(f"<div style='text-align: right; color: gray'>...</div>", unsafe_allow_html=True)
             with c2: st.image(get_champ_image(st.session_state.final_draft[i]), use_container_width=True)
 
+    # --- CỘT GIỮA (ACTION) ---
     with col_center:
+        # HÀM GRID
         def render_champion_grid(champs_to_show, key_prefix, unique_id=0):
             c1, c2, c3 = st.columns([1, 4, 1])
             with c2:
@@ -246,6 +248,7 @@ elif app_mode == "Draft Simulator":
                 idx = image_select(label="", images=imgs, captions=filtered, use_container_width=False, key=f"{key_prefix}_sel_{unique_id}_{st.session_state.session_id}", return_value="index")
             return filtered[idx] if idx is not None else None
 
+        # >>> PHASE: BAN <<<
         if st.session_state.phase == "BAN":
             st.info(f"🚫 Lượt CẤM thứ: {len(st.session_state.ban_list) + 1} / 10")
             
@@ -258,6 +261,7 @@ elif app_mode == "Draft Simulator":
                         if len(st.session_state.ban_list) == 10: st.session_state.phase = "PICK"
                         st.rerun()
 
+        # >>> PHASE: PICK <<<
         elif st.session_state.phase == "PICK":
             ORDER = [0, 5, 6, 1, 2, 7, 8, 3, 4, 9]
             if st.session_state.step < 10:
@@ -268,15 +272,18 @@ elif app_mode == "Draft Simulator":
                 team_txt = "BLUE" if is_blue else "RED"
                 st.markdown(f"<h4 style='text-align:center; color:{color}'>Đang chọn: {team_txt} - {role_label.upper()}</h4>", unsafe_allow_html=True)
                 
+                # --- AI SUGGESTION BLOCK (FIXED) ---
                 with st.expander("🤖 Gợi ý từ AI (Phân tích Tác Động)", expanded=True):
                     if st.button("💡 Phân tích & Gợi ý"):
                         try:
                             progress_text = "AI đang tính toán..."
                             my_bar = st.progress(0, text=progress_text)
                             
+                            # 1. Lọc tướng theo Role (Có cơ chế dự phòng)
                             valid_roles = CHAMPION_ROLES.get(role_label, set())
                             search_space = [c for c in available if normalize_name(c) in valid_roles]
                             
+                            # Fallback: Nếu không tìm thấy tướng role này (do lỗi CSV), lấy tất cả tướng
                             if not search_space:
                                 st.caption(f"⚠️ Không tìm thấy tướng role {role_label} trong dữ liệu, đang quét toàn bộ...")
                                 search_space = available
@@ -289,6 +296,7 @@ elif app_mode == "Draft Simulator":
                                 base_draft = st.session_state.final_draft.copy()
                                 base_draft[idx] = None 
                                 
+                                # Chuyển tên thành ID, nếu None thì lấy ID của 'No Champion' (thường là 0)
                                 ids_base = [name_to_idx.get(n if n else "No Champion", 0) for n in base_draft]
                                 
                                 with torch.no_grad():
@@ -298,8 +306,10 @@ elif app_mode == "Draft Simulator":
                                 total_cands = len(search_space)
                                 
                                 for i_prog, cand in enumerate(search_space):
+                                    # Cập nhật thanh loading
                                     my_bar.progress(int((i_prog / total_cands) * 100), text=f"Đang phân tích: {cand}")
                                     
+                                    # 3. New Score (Sau khi pick)
                                     tmp = st.session_state.final_draft.copy()
                                     tmp[idx] = cand
                                     ids_new = [name_to_idx.get(n if n else "No Champion", 0) for n in tmp]
@@ -310,19 +320,22 @@ elif app_mode == "Draft Simulator":
                                     # 4. Tính Impact
                                     raw_delta = new_blue_wr - base_blue_wr
                                     if is_blue:
-                                        impact = raw_delta     
+                                        impact = raw_delta     # Blue muốn WR tăng
                                         sort_score = new_blue_wr
                                     else:
-                                        impact = -raw_delta    
+                                        impact = -raw_delta    # Red muốn WR giảm -> Delta âm là tốt -> Đảo dấu
                                         sort_score = 1.0 - new_blue_wr
                                     
+                                    # Công thức Ranking: Score thực tế + (Impact * 10) để ưu tiên độ hợp
                                     final_rank = sort_score + (impact * 10.0)
                                     suggestions.append((cand, final_rank, impact))
                                 
                                 my_bar.empty()
                                 
+                                # Sắp xếp và lấy Top kết quả
                                 suggestions.sort(key=lambda x: x[1], reverse=True)
                                 
+                                # Hiển thị Grid Gợi ý
                                 with st.container(height=500, border=True):
                                     st.markdown(f"**Tìm thấy {len(suggestions)} tướng phù hợp:**")
                                     cols_per_row = 6
@@ -335,7 +348,7 @@ elif app_mode == "Draft Simulator":
                                                 st.markdown(f"<div style='text-align:center; font-size:12px;'><b>{name}</b></div>", unsafe_allow_html=True)
                                                 
                                                 imp_pct = imp * 100
-                                                if imp_pct > 0.05: 
+                                                if imp_pct > 0.05: # Giảm ngưỡng hiển thị màu xuống một chút
                                                     st.markdown(f"<div style='text-align:center; color:#00cc00; font-size:11px;'>▲ +{imp_pct:.1f}%</div>", unsafe_allow_html=True)
                                                 elif imp_pct < -0.05:
                                                     st.markdown(f"<div style='text-align:center; color:#ff3333; font-size:11px;'>▼ {imp_pct:.1f}%</div>", unsafe_allow_html=True)
@@ -346,11 +359,13 @@ elif app_mode == "Draft Simulator":
                             st.error(f"Đã xảy ra lỗi khi tính toán: {e}")
                 
                 st.write("---")
+                # --- MAIN PICK GRID ---
                 valid_roles = CHAMPION_ROLES.get(role_label, set())
                 filtered_grid = [c for c in available if normalize_name(c) in valid_roles]
                 c_check, _ = st.columns([1, 1])
                 with c_check: show_all = st.checkbox("Mở rộng (Hiện tất cả tướng)", value=False)
                 
+                # Fallback cho Main Grid luôn
                 final_list = available if show_all else (filtered_grid if filtered_grid else available)
                 
                 user_pick = render_champion_grid(final_list, "pick", st.session_state.step)

@@ -323,6 +323,7 @@ elif app_mode == "Draft Simulator":
                                 
                                 suggestions.sort(key=lambda x: x[1], reverse=True)
                                 
+                                # Hiển thị Grid Gợi ý
                                 with st.container(height=500, border=True):
                                     st.markdown(f"**Tìm thấy {len(suggestions)} tướng phù hợp:**")
                                     cols_per_row = 6
@@ -335,7 +336,7 @@ elif app_mode == "Draft Simulator":
                                                 st.markdown(f"<div style='text-align:center; font-size:12px;'><b>{name}</b></div>", unsafe_allow_html=True)
                                                 
                                                 imp_pct = imp * 100
-                                                if imp_pct > 0.05: 
+                                                if imp_pct > 0.05: # Giảm ngưỡng hiển thị màu xuống một chút
                                                     st.markdown(f"<div style='text-align:center; color:#00cc00; font-size:11px;'>▲ +{imp_pct:.1f}%</div>", unsafe_allow_html=True)
                                                 elif imp_pct < -0.05:
                                                     st.markdown(f"<div style='text-align:center; color:#ff3333; font-size:11px;'>▼ {imp_pct:.1f}%</div>", unsafe_allow_html=True)
@@ -346,11 +347,13 @@ elif app_mode == "Draft Simulator":
                             st.error(f"Đã xảy ra lỗi khi tính toán: {e}")
                 
                 st.write("---")
+                # --- MAIN PICK GRID ---
                 valid_roles = CHAMPION_ROLES.get(role_label, set())
                 filtered_grid = [c for c in available if normalize_name(c) in valid_roles]
                 c_check, _ = st.columns([1, 1])
                 with c_check: show_all = st.checkbox("Mở rộng (Hiện tất cả tướng)", value=False)
                 
+                # Fallback cho Main Grid luôn
                 final_list = available if show_all else (filtered_grid if filtered_grid else available)
                 
                 user_pick = render_champion_grid(final_list, "pick", st.session_state.step)
